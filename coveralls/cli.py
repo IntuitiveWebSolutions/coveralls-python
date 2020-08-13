@@ -73,6 +73,12 @@ def main(argv=None):
             coverallz.save_report(options['--output'])
             return
 
+        if options['--finish']:
+            log.info('Finishing parallel jobs...')
+            coverallz.parallel_finish()
+            log.info('Done')
+            return
+
         log.info('Submitting coverage to coveralls.io...')
         result = coverallz.wear()
 

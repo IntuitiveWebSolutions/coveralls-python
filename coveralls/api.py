@@ -48,7 +48,7 @@ class Coveralls(object):
 
         self.load_config_from_environment()
 
-        name, job, pr = self.load_config_from_ci_environment()
+        name, job, number, pr = self.load_config_from_ci_environment()
         self.config['service_name'] = self.config.get('service_name', name)
         if job:
             # N.B. Github Actions uses a different chunk of the Coveralls
@@ -60,6 +60,9 @@ class Coveralls(object):
                 self.config['service_job_id'] = job
         if pr:
             self.config['service_pull_request'] = pr
+
+        if number:
+            self.config['service_number'] = number
 
         self.ensure_token()
 
@@ -75,19 +78,19 @@ class Coveralls(object):
     @staticmethod
     def load_config_from_appveyor():
         pr = os.environ.get('APPVEYOR_PULL_REQUEST_NUMBER')
-        return 'appveyor', os.environ.get('APPVEYOR_BUILD_ID'), pr
+        return 'appveyor', os.environ.get('APPVEYOR_BUILD_ID'), None, pr
 
     @staticmethod
     def load_config_from_buildkite():
         pr = os.environ.get('BUILDKITE_PULL_REQUEST')
         if pr == 'false':
             pr = None
-        return 'buildkite', os.environ.get('BUILDKITE_JOB_ID'), pr
+        return 'buildkite', os.environ.get('BUILDKITE_JOB_ID'), None, pr
 
     @staticmethod
     def load_config_from_circle():
         pr = os.environ.get('CI_PULL_REQUEST', '').split('/')[-1] or None
-        return 'circle-ci', os.environ.get('CIRCLE_BUILD_NUM'), pr
+        return 'circle-ci', os.environ.get('CIRCLE_BUILD_NUM'), None, pr
 
     @staticmethod
     def load_config_from_github():
@@ -96,22 +99,30 @@ class Coveralls(object):
         if os.environ.get('GITHUB_REF', '').startswith('refs/pull/'):
             pr = os.environ.get('GITHUB_REF', '//').split('/')[2]
             service_number += '-PR-{0}'.format(pr)
-        return 'github-actions', service_number, pr
+        return 'github-actions', service_number, None, pr
 
     @staticmethod
     def load_config_from_jenkins():
         pr = os.environ.get('CI_PULL_REQUEST', '').split('/')[-1] or None
-        return 'jenkins', os.environ.get('BUILD_NUMBER'), pr
+        return 'jenkins', os.environ.get('BUILD_NUMBER'), None, pr
 
     @staticmethod
     def load_config_from_travis():
         pr = os.environ.get('TRAVIS_PULL_REQUEST')
-        return 'travis-ci', os.environ.get('TRAVIS_JOB_ID'), pr
+        return 'travis-ci', os.environ.get('TRAVIS_JOB_ID'), None, pr
 
     @staticmethod
     def load_config_from_semaphore():
         pr = os.environ.get('PULL_REQUEST_NUMBER')
-        return 'semaphore-ci', os.environ.get('SEMAPHORE_BUILD_NUMBER'), pr
+        return 'semaphore-ci', os.environ.get('SEMAPHORE_BUILD_NUMBER'), None, pr
+
+    @staticmethod
+    def load_config_from_drone():
+        pr = os.environ.get('DRONE_PULL_REQUEST')
+        number = os.environ.get('DRONE_BUILD_NUMBER')
+        job = os.environ.get('DRONE_STAGE_NUMBER')
+        return 'drone-io', job, number, pr
+
 
     @staticmethod
     def load_config_from_unknown():
@@ -119,23 +130,25 @@ class Coveralls(object):
 
     def load_config_from_ci_environment(self):
         if os.environ.get('APPVEYOR'):
-            name, job, pr = self.load_config_from_appveyor()
+            name, job, number, pr = self.load_config_from_appveyor()
         elif os.environ.get('BUILDKITE'):
-            name, job, pr = self.load_config_from_buildkite()
+            name, job, number, pr = self.load_config_from_buildkite()
         elif os.environ.get('CIRCLECI'):
-            name, job, pr = self.load_config_from_circle()
+            name, job, number, pr = self.load_config_from_circle()
         elif os.environ.get('GITHUB_ACTIONS'):
-            name, job, pr = self.load_config_from_github()
+            name, job, number, pr = self.load_config_from_github()
         elif os.environ.get('JENKINS_HOME'):
-            name, job, pr = self.load_config_from_jenkins()
+            name, job, number, pr = self.load_config_from_jenkins()
         elif os.environ.get('TRAVIS'):
             self._token_required = False
-            name, job, pr = self.load_config_from_travis()
+            name, job, number, pr = self.load_config_from_travis()
         elif os.environ.get('SEMAPHORE'):
-            name, job, pr = self.load_config_from_semaphore()
+            name, job, number, pr = self.load_config_from_semaphore()
+        elif os.environ.get('DRONE'):
+            name, job, number, pr = self.load_config_from_drone()
         else:
-            name, job, pr = self.load_config_from_unknown()
-        return (name, job, pr)
+            name, job, number, pr = self.load_config_from_unknown()
+        return (name, job, number, pr)
 
     def load_config_from_environment(self):
         coveralls_host = os.environ.get('COVERALLS_HOST')
@@ -194,6 +207,39 @@ class Coveralls(object):
             return response.json()
         except Exception as e:
             raise CoverallsException('Could not submit coverage: {}'.format(e))
+
+    # https://docs.coveralls.io/parallel-build-webhook
+    def parallel_finish(self):
+        payload = {'payload': {'status': 'done'}}
+
+        # required args
+        if self.config.get('repo_token'):
+            payload['repo_token'] = self.config['repo_token']
+        if self.config.get('service_number'):
+            payload['payload']['build_num'] = self.config['service_number']
+
+        # service-specific parameters
+        if os.environ.get('GITHUB_REPOSITORY'):
+            # Github Actions only
+            payload['repo_name'] = os.environ.get('GITHUB_REPOSITORY')
+
+        endpoint = '{}/webhook'.format(self._coveralls_host.rstrip('/'))
+        verify = not bool(os.environ.get('COVERALLS_SKIP_SSL_VERIFY'))
+        response = requests.post(endpoint, json=payload, verify=verify)
+        try:
+            response.raise_for_status()
+            response = response.json()
+        except Exception as e:
+            raise CoverallsException('Parallel finish failed: {}'.format(e))
+
+        if 'error' in response:
+            e = response['error']
+            raise CoverallsException('Parallel finish failed: {}'.format(e))
+
+        if 'done' not in response or not response['done']:
+            raise CoverallsException('Parallel finish failed')
+
+        return response
 
     def create_report(self):
         """Generate json dumped report for coveralls api."""
