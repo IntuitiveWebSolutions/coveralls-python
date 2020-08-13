@@ -126,7 +126,7 @@ class Coveralls(object):
 
     @staticmethod
     def load_config_from_unknown():
-        return 'coveralls-python', None, None
+        return 'coveralls-python', None, None, None
 
     def load_config_from_ci_environment(self):
         if os.environ.get('APPVEYOR'):
