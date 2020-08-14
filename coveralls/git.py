@@ -52,6 +52,7 @@ def git_branch():
                   or os.environ.get('GIT_BRANCH')
                   or os.environ.get('TRAVIS_BRANCH')
                   or os.environ.get('BRANCH_NAME')
+                  or os.environ.get('DRONE_BRANCH')
                   or run_command('git', 'rev-parse', '--abbrev-ref', 'HEAD'))
 
     return branch

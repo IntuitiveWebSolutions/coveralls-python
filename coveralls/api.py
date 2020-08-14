@@ -145,9 +145,18 @@ class Coveralls(object):
         elif os.environ.get('SEMAPHORE'):
             name, job, number, pr = self.load_config_from_semaphore()
         elif os.environ.get('DRONE'):
+            print("Its the Drone environment")
             name, job, number, pr = self.load_config_from_drone()
+            print(name)
+            print(job)
+            print(number)
+            print(pr)
         else:
             name, job, number, pr = self.load_config_from_unknown()
+        print(name)
+        print(job)
+        print(number)
+        print(pr)
         return (name, job, number, pr)
 
     def load_config_from_environment(self):
@@ -170,6 +179,10 @@ class Coveralls(object):
         flag_name = os.environ.get('COVERALLS_FLAG_NAME')
         if flag_name:
             self.config['flag_name'] = flag_name
+
+        number = os.environ.get('COVERALLS_SERVICE_JOB_NUMBER')
+        if number:
+            self.config['service_number'] = number
 
     def load_config_from_file(self):
         try:
