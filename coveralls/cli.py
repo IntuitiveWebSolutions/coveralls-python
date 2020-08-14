@@ -21,6 +21,7 @@ Global options:
     --rcfile=<file>   Specify configuration file. [default: .coveragerc]
     --output=<file>   Write report to file. Doesn't send anything.
     --merge=<file>    Merge report from file when submitting.
+    --finish          Finish parallel jobs.
     -h --help         Display this help.
     -v --verbose      Print extra info, always enabled when debugging.
 
