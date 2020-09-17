@@ -88,7 +88,7 @@ def git_info():
                 'author_email': os.environ.get('DRONE_COMMIT_AUTHOR_EMAIL'),
                 'committer_name': os.environ.get('DRONE_COMMIT_AUTHOR'),
                 'committer_email': os.environ.get('DRONE_COMMIT_AUTHOR_EMAIL'),
-                'message': os.environ.get('DRONE_COMMIT_MESSAGE'),
+                'message': os.environ.get('DRONE_COMMIT_BEFORE'),
             }
         else:
             head = {
