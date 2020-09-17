@@ -81,14 +81,24 @@ def git_info():
     """
     try:
         branch = git_branch()
-        head = {
-            'id': gitlog('%H'),
-            'author_name': gitlog('%aN'),
-            'author_email': gitlog('%ae'),
-            'committer_name': gitlog('%cN'),
-            'committer_email': gitlog('%ce'),
-            'message': gitlog('%s'),
-        }
+        if os.environ.get('DRONE_PULL_REQUEST'):
+            head = {
+                'id': os.environ.get('DRONE_COMMIT_BEFORE'),
+                'author_name': os.environ.get('DRONE_COMMIT_AUTHOR'),
+                'author_email': os.environ.get('DRONE_COMMIT_AUTHOR_EMAIL'),
+                'committer_name': os.environ.get('DRONE_COMMIT_AUTHOR'),
+                'committer_email': os.environ.get('DRONE_COMMIT_AUTHOR_EMAIL'),
+                'message': os.environ.get('DRONE_COMMIT_BEFORE'),
+            }
+        else:
+            head = {
+                'id': gitlog('%H'),
+                'author_name': gitlog('%aN'),
+                'author_email': gitlog('%ae'),
+                'committer_name': gitlog('%cN'),
+                'committer_email': gitlog('%ce'),
+                'message': gitlog('%s'),
+            }
         remotes = [{'name': line.split()[0], 'url': line.split()[1]}
                    for line in run_command('git', 'remote', '-v').splitlines()
                    if '(fetch)' in line]
